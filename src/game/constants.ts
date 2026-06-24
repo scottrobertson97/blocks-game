@@ -1,0 +1,9 @@
+export const CHUNK_SIZE = 16;
+export const CHUNK_HEIGHT = 32;
+export const CHUNK_RADIUS = 2;
+export const PLAYER_START_HEIGHT = 16;
+export const PLAYER_MOVE_SPEED = 8;
+export const PLAYER_FAST_SPEED = 16;
+export const PLAYER_VERTICAL_SPEED = 7;
+export const MOUSE_SENSITIVITY = 0.0023;
+export const MAX_BLOCK_REACH = 6;
