@@ -1,7 +1,8 @@
 import { CHUNK_HEIGHT, CHUNK_RADIUS, CHUNK_SIZE } from "../game/constants";
-import { BlockId } from "./Block";
+import { BlockId, isSolidBlock } from "./Block";
 import { Chunk } from "./Chunk";
 import { TerrainGenerator } from "./TerrainGenerator";
+import { TreeGenerator } from "./TreeGenerator";
 import { createChunkKey, worldToLocalBlock } from "./VoxelMath";
 
 export class World {
@@ -19,6 +20,8 @@ export class World {
         world.addChunk(chunk);
       }
     }
+
+    new TreeGenerator().placeTrees(world);
 
     return world;
   }
@@ -43,6 +46,16 @@ export class World {
     const local = worldToLocalBlock(worldX, worldZ);
     const chunk = this.getChunk(local.chunkX, local.chunkZ);
     return chunk?.getBlock(local.localX, y, local.localZ) ?? BlockId.Air;
+  }
+
+  findHighestSolidY(worldX: number, worldZ: number): number | null {
+    for (let y = CHUNK_HEIGHT - 1; y >= 0; y -= 1) {
+      if (isSolidBlock(this.getBlock(worldX, y, worldZ))) {
+        return y;
+      }
+    }
+
+    return null;
   }
 
   setBlock(worldX: number, y: number, worldZ: number, blockId: BlockId): string[] {
@@ -85,4 +98,3 @@ export class World {
     return [...keys].filter((key) => this.chunks.has(key));
   }
 }
-

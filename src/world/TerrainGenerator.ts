@@ -18,7 +18,7 @@ export class TerrainGenerator {
   }
 }
 
-function getTerrainHeight(worldX: number, worldZ: number): number {
+export function getTerrainHeight(worldX: number, worldZ: number): number {
   const rolling =
     Math.sin(worldX * 0.15) * 2.4 +
     Math.cos(worldZ * 0.15) * 2.1 +
@@ -38,4 +38,3 @@ function getLayerBlock(y: number, height: number): BlockId {
 
   return BlockId.Stone;
 }
-

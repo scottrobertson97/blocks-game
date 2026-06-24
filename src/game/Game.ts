@@ -32,11 +32,12 @@ export class Game {
     this.hud = new Hud(container);
     this.world = World.createDefault();
     this.chunkRenderer = new ChunkRenderer(this.scene, this.world);
-    this.player = new PlayerController(this.camera, this.input);
+    this.player = new PlayerController(this.camera, this.input, this.world);
     this.interactor = new BlockInteractor({
       camera: this.camera,
       domElement: this.renderer.domElement,
       hud: this.hud,
+      isBlockInsidePlayer: (x, y, z) => this.player.intersectsBlock(x, y, z),
       maxReach: MAX_BLOCK_REACH,
       scene: this.scene,
       world: this.world,
@@ -60,6 +61,7 @@ export class Game {
     this.updateFps(deltaSeconds);
     this.hud.update({
       fps: this.fps,
+      placeableBlocks: this.interactor.placeableBlocks,
       playerPosition: this.camera.position,
       pointerLocked: this.input.isPointerLocked(),
       selectedBlock: this.interactor.selectedBlock,
@@ -88,4 +90,3 @@ export class Game {
     this.renderer.setSize(width, height);
   };
 }
-

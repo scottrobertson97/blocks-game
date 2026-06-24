@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { BlockId, getBlockName, isSolidBlock } from "../world/Block";
+import { BlockId, PLACEABLE_BLOCKS, getBlockName, isSolidBlock } from "../world/Block";
 import { World } from "../world/World";
 import { Hud } from "../ui/Hud";
 
@@ -20,37 +20,40 @@ type BlockInteractorOptions = {
   camera: THREE.Camera;
   domElement: HTMLElement;
   hud: Hud;
+  isBlockInsidePlayer?: (x: number, y: number, z: number) => boolean;
   maxReach: number;
   onWorldEdited: (chunkKeys: string[]) => void;
   scene: THREE.Scene;
   world: World;
 };
 
-const selectableBlocks = [
-  BlockId.Grass,
-  BlockId.Dirt,
-  BlockId.Stone,
-  BlockId.Wood,
-  BlockId.Leaves,
-];
-
 export class BlockInteractor {
   currentTarget: BlockTarget | null = null;
-  selectedBlock: BlockId = BlockId.Grass;
 
   private readonly camera: THREE.Camera;
   private readonly direction = new THREE.Vector3();
   private readonly domElement: HTMLElement;
   private readonly highlight: THREE.LineSegments;
   private readonly hud: Hud;
+  private readonly isBlockInsidePlayer: (x: number, y: number, z: number) => boolean;
   private readonly maxReach: number;
   private readonly onWorldEdited: (chunkKeys: string[]) => void;
+  private selectedIndex = 0;
   private readonly world: World;
+
+  get placeableBlocks(): readonly BlockId[] {
+    return PLACEABLE_BLOCKS;
+  }
+
+  get selectedBlock(): BlockId {
+    return PLACEABLE_BLOCKS[this.selectedIndex];
+  }
 
   constructor(options: BlockInteractorOptions) {
     this.camera = options.camera;
     this.domElement = options.domElement;
     this.hud = options.hud;
+    this.isBlockInsidePlayer = options.isBlockInsidePlayer ?? (() => false);
     this.maxReach = options.maxReach;
     this.onWorldEdited = options.onWorldEdited;
     this.world = options.world;
@@ -59,6 +62,7 @@ export class BlockInteractor {
 
     this.domElement.addEventListener("mousedown", this.handleMouseDown);
     this.domElement.addEventListener("contextmenu", this.preventContextMenu);
+    this.domElement.addEventListener("wheel", this.handleWheel, { passive: false });
     document.addEventListener("keydown", this.handleKeyDown);
   }
 
@@ -100,6 +104,12 @@ export class BlockInteractor {
         y: block.y + normal.y,
         z: block.z + normal.z,
       };
+
+      if (this.isBlockInsidePlayer(placeAt.x, placeAt.y, placeAt.z)) {
+        this.hud.flashPrompt("Too close to place");
+        return;
+      }
+
       const affected = this.world.setBlock(placeAt.x, placeAt.y, placeAt.z, this.selectedBlock);
       this.onWorldEdited(affected);
     }
@@ -108,13 +118,26 @@ export class BlockInteractor {
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     const index = Number.parseInt(event.key, 10) - 1;
 
-    if (Number.isNaN(index) || !selectableBlocks[index]) {
+    if (Number.isNaN(index) || !PLACEABLE_BLOCKS[index]) {
       return;
     }
 
-    this.selectedBlock = selectableBlocks[index];
-    this.hud.flashPrompt(`Selected ${getBlockName(this.selectedBlock)}`);
+    this.selectIndex(index);
   };
+
+  private readonly handleWheel = (event: WheelEvent): void => {
+    if (document.pointerLockElement !== this.domElement || event.deltaY === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    this.selectIndex(this.selectedIndex + (event.deltaY > 0 ? 1 : -1));
+  };
+
+  private selectIndex(index: number): void {
+    this.selectedIndex = modulo(index, PLACEABLE_BLOCKS.length);
+    this.hud.flashPrompt(`Selected ${getBlockName(this.selectedBlock)}`);
+  }
 
   private readonly preventContextMenu = (event: MouseEvent): void => {
     event.preventDefault();
@@ -211,3 +234,6 @@ function intBound(start: number, direction: number): number {
   return Number.POSITIVE_INFINITY;
 }
 
+function modulo(value: number, size: number): number {
+  return ((value % size) + size) % size;
+}

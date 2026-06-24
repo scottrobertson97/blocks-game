@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { BlockTarget } from "../interaction/BlockInteractor";
-import { BlockId, getBlockName } from "../world/Block";
+import { BlockId, getBlockColor, getBlockName } from "../world/Block";
 
 type HudUpdate = {
   fps: number;
+  placeableBlocks: readonly BlockId[];
   playerPosition: THREE.Vector3;
   pointerLocked: boolean;
   selectedBlock: BlockId;
@@ -12,8 +13,10 @@ type HudUpdate = {
 
 export class Hud {
   private readonly debugText: HTMLDivElement;
+  private readonly inventory: HTMLDivElement;
   private readonly prompt: HTMLDivElement;
-  private readonly selectedText: HTMLSpanElement;
+  private inventoryBlocks: readonly BlockId[] = [];
+  private inventorySlots: HTMLDivElement[] = [];
   private hasShownControlsPrompt = false;
   private promptTimeout = 0;
 
@@ -25,27 +28,24 @@ export class Hud {
         <strong>Threecraft</strong>
         <span>Shape the terrain block by block</span>
       </div>
-      <div class="hud__status">
-        <span>Selected</span>
-        <strong data-selected-block>Grass</strong>
-      </div>
       <div class="hud__crosshair" aria-hidden="true"></div>
+      <div class="hud__inventory" data-inventory aria-label="Block inventory"></div>
       <div class="hud__prompt" data-prompt>Click to play</div>
       <div class="hud__debug" data-debug></div>
     `;
     container.appendChild(root);
 
     const debugText = root.querySelector<HTMLDivElement>("[data-debug]");
+    const inventory = root.querySelector<HTMLDivElement>("[data-inventory]");
     const prompt = root.querySelector<HTMLDivElement>("[data-prompt]");
-    const selectedText = root.querySelector<HTMLSpanElement>("[data-selected-block]");
 
-    if (!debugText || !prompt || !selectedText) {
+    if (!debugText || !inventory || !prompt) {
       throw new Error("HUD failed to initialize.");
     }
 
     this.debugText = debugText;
+    this.inventory = inventory;
     this.prompt = prompt;
-    this.selectedText = selectedText;
   }
 
   flashPrompt(message: string): void {
@@ -59,7 +59,8 @@ export class Hud {
   }
 
   update(update: HudUpdate): void {
-    this.selectedText.textContent = getBlockName(update.selectedBlock);
+    this.renderInventory(update.placeableBlocks);
+    this.updateInventorySelection(update.selectedBlock);
 
     if (!update.pointerLocked && this.promptTimeout === 0) {
       this.hasShownControlsPrompt = false;
@@ -83,8 +84,48 @@ export class Hud {
       `FPS ${update.fps}`,
       `Pos ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`,
       `Target ${target}`,
-      "1-5 swap blocks",
+      "Wheel / 1-5 swap blocks",
     ].join(" | ");
+  }
+
+  private renderInventory(placeableBlocks: readonly BlockId[]): void {
+    if (this.hasSameInventory(placeableBlocks)) {
+      return;
+    }
+
+    this.inventoryBlocks = [...placeableBlocks];
+    this.inventory.replaceChildren();
+    this.inventorySlots = placeableBlocks.map((blockId, index) => {
+      const slot = document.createElement("div");
+      slot.className = "hud__inventory-slot";
+      slot.dataset.blockId = String(blockId);
+      slot.innerHTML = `
+        <span class="hud__inventory-key">${index + 1}</span>
+        <span class="hud__inventory-swatch"></span>
+        <span class="hud__inventory-name">${getBlockName(blockId)}</span>
+      `;
+
+      const swatch = slot.querySelector<HTMLSpanElement>(".hud__inventory-swatch");
+      if (swatch) {
+        swatch.style.backgroundColor = getBlockColor(blockId);
+      }
+
+      this.inventory.appendChild(slot);
+      return slot;
+    });
+  }
+
+  private updateInventorySelection(selectedBlock: BlockId): void {
+    this.inventorySlots.forEach((slot) => {
+      slot.classList.toggle("hud__inventory-slot--selected", slot.dataset.blockId === String(selectedBlock));
+    });
+  }
+
+  private hasSameInventory(placeableBlocks: readonly BlockId[]): boolean {
+    return (
+      this.inventoryBlocks.length === placeableBlocks.length &&
+      this.inventoryBlocks.every((blockId, index) => blockId === placeableBlocks[index])
+    );
   }
 
   private clearPromptTimer(): void {

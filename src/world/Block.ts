@@ -9,6 +9,14 @@ export const BlockId = {
 
 export type BlockId = (typeof BlockId)[keyof typeof BlockId];
 
+export const PLACEABLE_BLOCKS = [
+  BlockId.Grass,
+  BlockId.Dirt,
+  BlockId.Stone,
+  BlockId.Wood,
+  BlockId.Leaves,
+] as const;
+
 type BlockDefinition = {
   color: string;
   name: string;
@@ -35,4 +43,3 @@ export function getBlockName(blockId: BlockId): string {
 export function getBlockColor(blockId: BlockId): string {
   return BLOCK_DEFINITIONS[blockId].color;
 }
-
