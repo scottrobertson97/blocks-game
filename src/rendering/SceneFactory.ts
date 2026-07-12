@@ -1,6 +1,12 @@
 import * as THREE from "three";
 
-export function createScene(): THREE.Scene {
+export type SceneEnvironment = {
+  hemisphere: THREE.HemisphereLight;
+  scene: THREE.Scene;
+  sunlight: THREE.DirectionalLight;
+};
+
+export function createSceneEnvironment(): SceneEnvironment {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color("#8fc7e8");
   scene.fog = new THREE.Fog("#8fc7e8", 70, 150);
@@ -12,10 +18,9 @@ export function createScene(): THREE.Scene {
   sunlight.position.set(30, 45, 20);
   scene.add(sunlight);
 
-  return scene;
+  return { hemisphere, scene, sunlight };
 }
 
 export function createCamera(): THREE.PerspectiveCamera {
   return new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 220);
 }
-

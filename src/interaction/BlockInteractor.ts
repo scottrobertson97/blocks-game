@@ -1,7 +1,14 @@
 import * as THREE from "three";
-import { BlockId, PLACEABLE_BLOCKS, getBlockName, isSolidBlock } from "../world/Block";
-import { World } from "../world/World";
+import { Inventory } from "../inventory/Inventory";
 import { Hud } from "../ui/Hud";
+import {
+  BlockId,
+  PLACEABLE_BLOCKS,
+  getBlockName,
+  isSolidBlock,
+  isTargetableBlock,
+} from "../world/Block";
+import { World } from "../world/World";
 
 type Vec3 = {
   x: number;
@@ -20,8 +27,12 @@ type BlockInteractorOptions = {
   camera: THREE.Camera;
   domElement: HTMLElement;
   hud: Hud;
+  inventory: Inventory;
   isBlockInsidePlayer?: (x: number, y: number, z: number) => boolean;
   maxReach: number;
+  onBlockPlaced?: (blockId: BlockId, position: Vec3) => void;
+  onOpenCrafting?: () => void;
+  onTntIgnite?: (x: number, y: number, z: number) => boolean;
   onWorldEdited: (chunkKeys: string[]) => void;
   scene: THREE.Scene;
   world: World;
@@ -35,8 +46,12 @@ export class BlockInteractor {
   private readonly domElement: HTMLElement;
   private readonly highlight: THREE.LineSegments;
   private readonly hud: Hud;
+  private readonly inventory: Inventory;
   private readonly isBlockInsidePlayer: (x: number, y: number, z: number) => boolean;
   private readonly maxReach: number;
+  private readonly onBlockPlaced: (blockId: BlockId, position: Vec3) => void;
+  private readonly onOpenCrafting: () => void;
+  private readonly onTntIgnite: (x: number, y: number, z: number) => boolean;
   private readonly onWorldEdited: (chunkKeys: string[]) => void;
   private selectedIndex = 0;
   private readonly world: World;
@@ -53,8 +68,12 @@ export class BlockInteractor {
     this.camera = options.camera;
     this.domElement = options.domElement;
     this.hud = options.hud;
+    this.inventory = options.inventory;
     this.isBlockInsidePlayer = options.isBlockInsidePlayer ?? (() => false);
     this.maxReach = options.maxReach;
+    this.onBlockPlaced = options.onBlockPlaced ?? (() => undefined);
+    this.onOpenCrafting = options.onOpenCrafting ?? (() => undefined);
+    this.onTntIgnite = options.onTntIgnite ?? (() => false);
     this.onWorldEdited = options.onWorldEdited;
     this.world = options.world;
     this.highlight = this.createHighlight();
@@ -91,34 +110,87 @@ export class BlockInteractor {
     }
 
     if (event.button === 0) {
-      const { block } = this.currentTarget;
-      const affected = this.world.setBlock(block.x, block.y, block.z, BlockId.Air);
-      this.onWorldEdited(affected);
+      this.breakTargetBlock();
       return;
     }
 
     if (event.button === 2) {
-      const { block, normal } = this.currentTarget;
-      const placeAt = {
-        x: block.x + normal.x,
-        y: block.y + normal.y,
-        z: block.z + normal.z,
-      };
-
-      if (this.isBlockInsidePlayer(placeAt.x, placeAt.y, placeAt.z)) {
-        this.hud.flashPrompt("Too close to place");
-        return;
-      }
-
-      const affected = this.world.setBlock(placeAt.x, placeAt.y, placeAt.z, this.selectedBlock);
-      this.onWorldEdited(affected);
+      this.useOrPlaceBlock(event.shiftKey);
     }
   };
+
+  private breakTargetBlock(): void {
+    if (!this.currentTarget) {
+      return;
+    }
+
+    const { block, blockId } = this.currentTarget;
+    const affected = this.world.setBlock(block.x, block.y, block.z, BlockId.Air);
+
+    if (affected.length === 0) {
+      return;
+    }
+
+    this.inventory.add(blockId);
+    this.onWorldEdited(affected);
+    this.hud.flashPrompt(`+1 ${getBlockName(blockId)}`);
+  }
+
+  private useOrPlaceBlock(forcePlace: boolean): void {
+    if (!this.currentTarget) {
+      return;
+    }
+
+    const { block, blockId, normal } = this.currentTarget;
+
+    if (!forcePlace && blockId === BlockId.CraftingTable) {
+      this.onOpenCrafting();
+      return;
+    }
+
+    if (!forcePlace && blockId === BlockId.TNT && this.onTntIgnite(block.x, block.y, block.z)) {
+      this.hud.flashPrompt("TNT ignited");
+      return;
+    }
+
+    if (!this.inventory.has(this.selectedBlock)) {
+      this.hud.flashPrompt(`Out of ${getBlockName(this.selectedBlock)}`);
+      return;
+    }
+
+    const placeAt = {
+      x: block.x + normal.x,
+      y: block.y + normal.y,
+      z: block.z + normal.z,
+    };
+
+    if (this.world.getBlock(placeAt.x, placeAt.y, placeAt.z) !== BlockId.Air) {
+      this.hud.flashPrompt("That space is occupied");
+      return;
+    }
+
+    if (
+      isSolidBlock(this.selectedBlock) &&
+      this.isBlockInsidePlayer(placeAt.x, placeAt.y, placeAt.z)
+    ) {
+      this.hud.flashPrompt("Too close to place");
+      return;
+    }
+
+    const affected = this.world.setBlock(placeAt.x, placeAt.y, placeAt.z, this.selectedBlock);
+
+    if (affected.length === 0 || !this.inventory.remove(this.selectedBlock)) {
+      return;
+    }
+
+    this.onWorldEdited(affected);
+    this.onBlockPlaced(this.selectedBlock, placeAt);
+  }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     const index = Number.parseInt(event.key, 10) - 1;
 
-    if (Number.isNaN(index) || !PLACEABLE_BLOCKS[index]) {
+    if (Number.isNaN(index) || index < 0 || index >= Math.min(9, PLACEABLE_BLOCKS.length)) {
       return;
     }
 
@@ -148,8 +220,8 @@ export class BlockInteractor {
     const material = new THREE.LineBasicMaterial({
       color: "#f8fbff",
       depthTest: false,
-      transparent: true,
       opacity: 0.85,
+      transparent: true,
     });
     const highlight = new THREE.LineSegments(geometry, material);
     highlight.renderOrder = 10;
@@ -185,7 +257,7 @@ function raycastVoxels(
   for (let step = 0; step < 128 && distance <= maxDistance; step += 1) {
     const blockId = world.getBlock(x, y, z);
 
-    if (isSolidBlock(blockId)) {
+    if (isTargetableBlock(blockId) && !(distance === 0 && blockId === BlockId.Water)) {
       return {
         block: { x, y, z },
         blockId,

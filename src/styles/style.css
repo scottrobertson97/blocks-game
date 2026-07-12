@@ -20,6 +20,10 @@ body,
     sans-serif;
 }
 
+button {
+  font: inherit;
+}
+
 canvas {
   display: block;
   width: 100%;
@@ -27,16 +31,17 @@ canvas {
 }
 
 .hud {
+  --hud-panel-bg: rgb(13 18 25 / 78%);
+  --hud-panel-border: rgb(255 255 255 / 20%);
+  --hud-selected: #fff0bd;
   position: fixed;
   inset: 0;
-  pointer-events: none;
   color: #f7fbff;
-  --hud-panel-bg: rgb(13 18 25 / 70%);
-  --hud-panel-border: rgb(255 255 255 / 18%);
-  --hud-selected: #fff0bd;
+  pointer-events: none;
 }
 
 .hud__objective,
+.hud__status,
 .hud__debug,
 .hud__prompt,
 .hud__inventory {
@@ -44,7 +49,7 @@ canvas {
   border: 1px solid var(--hud-panel-border);
   border-radius: 8px;
   background: var(--hud-panel-bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
   backdrop-filter: blur(8px);
 }
 
@@ -67,6 +72,53 @@ canvas {
   font-size: 0.78rem;
 }
 
+.hud__status {
+  top: 18px;
+  right: 18px;
+  display: grid;
+  gap: 7px;
+  width: 220px;
+  padding: 10px 12px;
+}
+
+.hud__status-row {
+  display: flex;
+  justify-content: space-between;
+  color: #dbe5eb;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.hud__health {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  width: 100%;
+  height: 11px;
+}
+
+.hud__health-pip {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 8%);
+}
+
+.hud__health-pip::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--health-fill, 0%);
+  background: #e85b55;
+  content: "";
+}
+
+.hud__time {
+  color: #f2d794;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
 .hud__crosshair {
   position: absolute;
   top: 50%;
@@ -79,9 +131,9 @@ canvas {
 .hud__crosshair::before,
 .hud__crosshair::after {
   position: absolute;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 0 4px rgb(0 0 0 / 70%);
   content: "";
-  background: rgb(255 255 255 / 90%);
-  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
 }
 
 .hud__crosshair::before {
@@ -102,23 +154,30 @@ canvas {
   left: 50%;
   bottom: 18px;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: stretch;
   max-width: calc(100vw - 36px);
-  padding: 8px;
+  padding: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
   transform: translateX(-50%);
+}
+
+.hud__inventory::-webkit-scrollbar {
+  display: none;
 }
 
 .hud__inventory-slot {
   position: relative;
   display: grid;
-  grid-template-rows: auto auto;
-  gap: 5px;
+  flex: 0 0 62px;
+  grid-template-rows: 27px 12px;
+  gap: 4px;
   align-content: center;
   justify-items: center;
-  width: 72px;
-  min-height: 58px;
-  padding: 8px 7px 7px;
+  width: 62px;
+  min-height: 54px;
+  padding: 7px 5px 6px;
   border: 1px solid rgb(255 255 255 / 16%);
   border-radius: 6px;
   background: rgb(255 255 255 / 8%);
@@ -136,30 +195,49 @@ canvas {
   transform: translateY(-3px);
 }
 
-.hud__inventory-key {
+.hud__inventory-slot--empty:not(.hud__inventory-slot--selected) {
+  opacity: 0.46;
+}
+
+.hud__inventory-key,
+.hud__inventory-count {
   position: absolute;
-  top: 4px;
-  left: 6px;
-  color: #b8c8d4;
+  color: #c4d1d9;
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   line-height: 1;
 }
 
-.hud__inventory-swatch {
-  width: 24px;
-  height: 24px;
-  border: 1px solid rgb(255 255 255 / 28%);
+.hud__inventory-key {
+  top: 4px;
+  left: 5px;
+}
+
+.hud__inventory-count {
+  top: 4px;
+  right: 5px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.hud__inventory-swatch,
+.hud__recipe-swatch {
+  border: 1px solid rgb(255 255 255 / 30%);
   border-radius: 4px;
   box-shadow:
     inset 0 3px 0 rgb(255 255 255 / 18%),
     inset 0 -4px 0 rgb(0 0 0 / 18%);
 }
 
+.hud__inventory-swatch {
+  width: 25px;
+  height: 25px;
+}
+
 .hud__inventory-name {
   max-width: 100%;
   overflow: hidden;
-  font-size: 0.68rem;
+  font-size: 0.61rem;
   font-weight: 700;
   line-height: 1;
   text-overflow: ellipsis;
@@ -168,10 +246,10 @@ canvas {
 
 .hud__prompt {
   left: 50%;
-  bottom: 96px;
+  bottom: 92px;
   max-width: calc(100vw - 36px);
-  padding: 10px 14px;
-  font-size: 0.85rem;
+  padding: 9px 13px;
+  font-size: 0.82rem;
   transform: translateX(-50%);
   transition:
     opacity 180ms ease,
@@ -186,22 +264,185 @@ canvas {
 
 .hud__debug {
   right: 18px;
-  bottom: 96px;
+  bottom: 92px;
   max-width: min(680px, calc(100vw - 36px));
   padding: 8px 10px;
   color: #c9d6df;
   font-family: "Cascadia Mono", Consolas, monospace;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+}
+
+.hud__damage {
+  position: absolute;
+  inset: 0;
+  border: 0 solid rgb(203 51 45 / 0%);
+  opacity: 0;
+  transition:
+    border-width 120ms ease,
+    opacity 300ms ease;
+}
+
+.hud__damage--active {
+  border-width: 12px;
+  border-color: rgb(203 51 45 / 58%);
+  opacity: 1;
+}
+
+.hud__crafting[hidden] {
+  display: none;
+}
+
+.hud__crafting {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(5 8 12 / 72%);
+  pointer-events: auto;
+}
+
+.hud__crafting-panel {
+  display: grid;
+  gap: 0;
+  width: min(560px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 8px;
+  background: #182027;
+  box-shadow: 0 22px 70px rgb(0 0 0 / 46%);
+}
+
+.hud__crafting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgb(255 255 255 / 12%);
+}
+
+.hud__crafting-header h2 {
+  margin: 2px 0 0;
+  font-size: 1.2rem;
+  letter-spacing: 0;
+}
+
+.hud__crafting-kicker {
+  color: #8fc7a0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hud__icon-button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 7%);
+  color: #f7fbff;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.hud__recipes {
+  overflow-y: auto;
+}
+
+.hud__recipe {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 82px;
+  padding: 13px 20px;
+  border-bottom: 1px solid rgb(255 255 255 / 9%);
+}
+
+.hud__recipe-swatch {
+  width: 36px;
+  height: 36px;
+}
+
+.hud__recipe-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hud__recipe-copy strong {
+  font-size: 0.88rem;
+}
+
+.hud__recipe-copy span,
+.hud__recipe-ingredients {
+  overflow: hidden;
+  color: #aebdc6;
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud__recipe button,
+.hud__reset-button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.hud__recipe button {
+  background: #5b9d68;
+  color: #07120a;
+}
+
+.hud__recipe button:disabled {
+  background: #343d43;
+  color: #7f8b92;
+  cursor: not-allowed;
+}
+
+.hud__crafting-feedback {
+  min-height: 38px;
+  padding: 11px 20px;
+  color: #f2d794;
+  font-size: 0.76rem;
+}
+
+.hud__crafting-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px 18px;
+}
+
+.hud__reset-button {
+  background: transparent;
+  color: #ee918a;
 }
 
 @media (max-width: 680px) {
   .hud__objective {
     top: 12px;
+    left: 12px;
+    padding: 8px 10px;
   }
 
-  .hud__objective {
-    left: 12px;
-    max-width: calc(100vw - 24px);
+  .hud__objective span {
+    display: none;
+  }
+
+  .hud__status {
+    top: 12px;
+    right: 12px;
+    width: min(190px, calc(100vw - 142px));
+    padding: 8px 9px;
   }
 
   .hud__inventory {
@@ -212,25 +453,51 @@ canvas {
   }
 
   .hud__inventory-slot {
-    width: 54px;
-    min-height: 52px;
-    padding: 7px 5px 6px;
+    flex-basis: 52px;
+    width: 52px;
+    min-height: 50px;
   }
 
   .hud__inventory-swatch {
-    width: 21px;
-    height: 21px;
+    width: 22px;
+    height: 22px;
   }
 
   .hud__inventory-name {
-    font-size: 0.6rem;
+    font-size: 0.56rem;
   }
 
   .hud__prompt {
-    bottom: 82px;
+    bottom: 94px;
   }
 
   .hud__debug {
     display: none;
+  }
+
+  .hud__crafting {
+    padding: 10px;
+  }
+
+  .hud__crafting-panel {
+    max-height: calc(100vh - 20px);
+  }
+
+  .hud__crafting-header,
+  .hud__recipe,
+  .hud__crafting-feedback,
+  .hud__crafting-footer {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .hud__recipe {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 9px;
+  }
+
+  .hud__recipe-swatch {
+    width: 30px;
+    height: 30px;
   }
 }

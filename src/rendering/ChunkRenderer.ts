@@ -2,10 +2,10 @@ import * as THREE from "three";
 import { buildChunkGeometry } from "../world/ChunkMesher";
 import { parseChunkKey } from "../world/VoxelMath";
 import { World } from "../world/World";
-import { createChunkMaterial } from "./Materials";
+import { createChunkMaterials } from "./Materials";
 
 export class ChunkRenderer {
-  private readonly material = createChunkMaterial();
+  private readonly materials = createChunkMaterials();
   private readonly meshes = new Map<string, THREE.Mesh>();
 
   constructor(
@@ -41,7 +41,7 @@ export class ChunkRenderer {
       return;
     }
 
-    const mesh = new THREE.Mesh(geometry, this.material);
+    const mesh = new THREE.Mesh(geometry, this.materials);
     mesh.name = `chunk-${chunkKey}`;
     mesh.position.set(chunk.originX, 0, chunk.originZ);
     this.meshes.set(chunkKey, mesh);
@@ -60,4 +60,3 @@ export class ChunkRenderer {
     this.meshes.delete(chunkKey);
   }
 }
-

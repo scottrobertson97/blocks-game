@@ -1,8 +1,19 @@
 # Threecraft
 
-Threecraft is a small browser-based Minecraft-style voxel sandbox built with Three.js, TypeScript, and Vite.
+Threecraft is a browser-based voxel survival sandbox built with Three.js, TypeScript, and Vite. It renders a chunked block world with pixel textures, first-person collision, finite block stacks, crafting, hazards, and automatic local saves.
 
-The goal is a clean playable foundation: chunked voxel terrain, visible-face rendering, first-person movement, grounded collision, block breaking and placing, generated trees, and a compact creative hotbar.
+## Features
+
+- Procedural terrain with lakes, beaches, caves, coal, iron, and trees
+- Visible-face chunk meshing with a generated pixel-art texture atlas
+- First-person movement, gravity, jumping, collision, health, and fall damage
+- Center raycast targeting with a block outline
+- Block breaking, collectible drops, finite placement stacks, and a 12-block hotbar
+- Crafting recipes for planks, crafting tables, grass blocks, and TNT
+- A four-block-radius water spread simulation
+- Primed TNT, terrain explosions, chain reactions, and blast damage
+- A four-minute day/night cycle with changing sky, light, fog, and stars
+- Automatic local saving for the world, inventory, player, and clock
 
 ## Play
 
@@ -11,7 +22,7 @@ npm install
 npm run dev
 ```
 
-Open the local Vite URL, then click the game view to lock the pointer.
+Open the local Vite URL and click the game view to lock the pointer.
 
 Controls:
 
@@ -19,19 +30,26 @@ Controls:
 - Mouse: Look around
 - `Space`: Jump
 - `Shift`: Move faster
-- Left click: Break the targeted block
+- Left click: Break and collect the targeted block
 - Right click: Place the selected block
-- Mouse wheel: Cycle selected block
-- `1`-`5`: Select a hotbar block
-- `Esc`: Release pointer lock
+- Mouse wheel: Cycle all hotbar blocks
+- `1`-`9`: Select the first nine hotbar slots
+- `E`: Open or close crafting
+- Right click a crafting table: Open crafting
+- Right click TNT: Ignite it
+- `Shift` + right click: Place beside a crafting table or TNT instead of using it
+- `Esc`: Release pointer lock or close crafting
 
-## Build
+The game autosaves in browser `localStorage`. Use **Reset world** in the crafting panel to delete that save and regenerate the world.
+
+## Build And Test
 
 ```bash
+npm run test:systems
 npm run build
 ```
 
-The production build is emitted to `dist`.
+`test:systems` checks generation, caves, ores, crafting, fall damage, water flow, TNT, and the day/night clock. The production build is emitted to `dist`.
 
 Preview the production build locally:
 
@@ -53,7 +71,7 @@ This project is configured for normal repository-based GitHub Pages deployment a
 https://scottrobertson97.github.io/blocks-game/
 ```
 
-The Vite base path is set to `/blocks-game/`, and `.github/workflows/deploy.yml` builds and deploys the static `dist` folder through GitHub Actions.
+The Vite base path is `/blocks-game/`. The workflow at `.github/workflows/deploy.yml` builds and deploys the static `dist` folder through GitHub Actions.
 
 To enable Pages:
 
@@ -65,13 +83,12 @@ To enable Pages:
 
 ## Development Notes
 
-This is a static frontend app. Do not add an Express server, backend API, or server-side runtime for version 1.
+This remains a static frontend app. World and player data persist locally; there is no backend or account system.
 
-Important implementation boundaries:
-
-- World state lives in `src/world`.
+- World simulation lives in `src/world`.
+- Inventory and recipes live in `src/inventory` and `src/crafting`.
+- Save serialization lives in `src/persistence`.
 - Three.js rendering adapters live in `src/rendering`.
 - Movement and browser input live in `src/player`.
 - Block targeting/editing lives in `src/interaction`.
-- DOM HUD and hotbar rendering live in `src/ui` and `src/styles`.
-
+- DOM HUD and crafting UI live in `src/ui` and `src/styles`.

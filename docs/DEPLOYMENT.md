@@ -57,6 +57,7 @@ The workflow lives at `.github/workflows/deploy.yml`.
 Run:
 
 ```bash
+npm run test:systems
 npm run build
 npm run preview
 ```
@@ -76,4 +77,3 @@ If another local preview already uses `4173`, Vite may choose or require a diffe
 3. Under **Build and deployment**, set **Source** to **GitHub Actions**.
 4. Push to `main`.
 5. Open the deployed Pages URL after the workflow completes.
-

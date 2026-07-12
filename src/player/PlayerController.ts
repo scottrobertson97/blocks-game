@@ -10,6 +10,7 @@ import {
   PLAYER_RADIUS,
   PLAYER_RESPAWN_Y,
 } from "../game/constants";
+import type { PlayerSaveState } from "../persistence/SaveTypes";
 import { isSolidBlock } from "../world/Block";
 import { World } from "../world/World";
 import { Input } from "./Input";
@@ -20,24 +21,41 @@ type BlockCoord = {
   z: number;
 };
 
+type PlayerControllerOptions = {
+  onDamage?: (amount: number, reason: string) => void;
+  onDeath?: (reason: string) => void;
+  onStateChanged?: () => void;
+};
+
 const START_X = 8;
 const START_Z = 8;
 const GROUND_EPSILON = 0.001;
 const BODY_EPSILON = 0.0001;
 const COLLISION_STEP = 0.05;
+const MAX_HEALTH = 20;
+const SAFE_FALL_DISTANCE = 3;
 
 export class PlayerController {
+  private fallDistance = 0;
+  private grounded = false;
+  private health = MAX_HEALTH;
+  private readonly onDamage: (amount: number, reason: string) => void;
+  private readonly onDeath: (reason: string) => void;
+  private readonly onStateChanged: () => void;
   private pitch = -0.75;
   private verticalVelocity = 0;
   private wasJumpPressed = false;
   private yaw = Math.PI * 0.75;
-  private grounded = false;
 
   constructor(
     private readonly camera: THREE.PerspectiveCamera,
     private readonly input: Input,
     private readonly world: World,
+    options: PlayerControllerOptions = {},
   ) {
+    this.onDamage = options.onDamage ?? (() => undefined);
+    this.onDeath = options.onDeath ?? (() => undefined);
+    this.onStateChanged = options.onStateChanged ?? (() => undefined);
     this.camera.rotation.order = "YXZ";
     this.resetToStartPosition();
     this.applyLookRotation();
@@ -46,6 +64,67 @@ export class PlayerController {
   update(deltaSeconds: number): void {
     this.updateLook();
     this.updateMovement(deltaSeconds);
+  }
+
+  getHealth(): number {
+    return this.health;
+  }
+
+  getMaxHealth(): number {
+    return MAX_HEALTH;
+  }
+
+  serialize(): PlayerSaveState {
+    return {
+      health: this.health,
+      position: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
+    };
+  }
+
+  restore(state: PlayerSaveState): void {
+    this.health = THREE.MathUtils.clamp(Math.floor(state.health), 1, MAX_HEALTH);
+    const [x, y, z] = state.position;
+
+    if (y <= PLAYER_RESPAWN_Y || ![x, y, z].every(Number.isFinite)) {
+      return;
+    }
+
+    const savedPosition = new THREE.Vector3(x, y, z);
+    if (!this.collidesAt(savedPosition)) {
+      this.camera.position.copy(savedPosition);
+      this.verticalVelocity = 0;
+      this.grounded = false;
+    }
+  }
+
+  takeDamage(amount: number, reason = "Player hurt"): void {
+    const damage = Math.max(0, Math.floor(amount));
+
+    if (damage === 0) {
+      return;
+    }
+
+    this.health = Math.max(0, this.health - damage);
+    this.onDamage(damage, reason);
+    this.onStateChanged();
+
+    if (this.health === 0) {
+      this.onDeath(reason);
+      this.health = MAX_HEALTH;
+      this.resetToStartPosition();
+    }
+  }
+
+  intersectsBlock(x: number, y: number, z: number): boolean {
+    const body = getBodyBounds(this.camera.position);
+    return (
+      x < body.maxX &&
+      x + 1 > body.minX &&
+      y < body.maxY &&
+      y + 1 > body.minY &&
+      z < body.maxZ &&
+      z + 1 > body.minZ
+    );
   }
 
   private updateLook(): void {
@@ -57,6 +136,40 @@ export class PlayerController {
   }
 
   private updateMovement(deltaSeconds: number): void {
+    if (this.input.isPointerLocked()) {
+      this.applyHorizontalMovement(deltaSeconds);
+    }
+
+    const jumpPressed = this.input.isPointerLocked() && this.input.isKeyDown("Space");
+    if (jumpPressed && !this.wasJumpPressed && this.grounded) {
+      this.verticalVelocity = PLAYER_JUMP_SPEED;
+      this.grounded = false;
+      this.fallDistance = 0;
+    }
+    this.wasJumpPressed = jumpPressed;
+
+    const wasGrounded = this.grounded;
+    this.verticalVelocity -= PLAYER_GRAVITY * deltaSeconds;
+    const verticalDelta = this.verticalVelocity * deltaSeconds;
+    const collided = this.moveAxis("y", verticalDelta);
+
+    if (verticalDelta < 0) {
+      if (collided) {
+        if (!wasGrounded) {
+          this.applyFallDamage(this.fallDistance + Math.abs(verticalDelta));
+        }
+        this.fallDistance = 0;
+      } else if (!wasGrounded) {
+        this.fallDistance += Math.abs(verticalDelta);
+      }
+    }
+
+    if (this.camera.position.y < PLAYER_RESPAWN_Y) {
+      this.takeDamage(this.health, "Fell out of the world");
+    }
+  }
+
+  private applyHorizontalMovement(deltaSeconds: number): void {
     const horizontalMove = new THREE.Vector3();
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
@@ -78,28 +191,23 @@ export class PlayerController {
       horizontalMove.sub(right);
     }
 
-    if (horizontalMove.lengthSq() > 0) {
-      horizontalMove.normalize();
-      const speed = this.input.isKeyDown("ShiftLeft") || this.input.isKeyDown("ShiftRight")
-        ? PLAYER_FAST_SPEED
-        : PLAYER_MOVE_SPEED;
-      horizontalMove.multiplyScalar(speed * deltaSeconds);
-      this.moveAxis("x", horizontalMove.x);
-      this.moveAxis("z", horizontalMove.z);
+    if (horizontalMove.lengthSq() === 0) {
+      return;
     }
 
-    const jumpPressed = this.input.isKeyDown("Space");
-    if (jumpPressed && !this.wasJumpPressed && this.grounded) {
-      this.verticalVelocity = PLAYER_JUMP_SPEED;
-      this.grounded = false;
-    }
-    this.wasJumpPressed = jumpPressed;
+    horizontalMove.normalize();
+    const speed = this.input.isKeyDown("ShiftLeft") || this.input.isKeyDown("ShiftRight")
+      ? PLAYER_FAST_SPEED
+      : PLAYER_MOVE_SPEED;
+    horizontalMove.multiplyScalar(speed * deltaSeconds);
+    this.moveAxis("x", horizontalMove.x);
+    this.moveAxis("z", horizontalMove.z);
+  }
 
-    this.verticalVelocity -= PLAYER_GRAVITY * deltaSeconds;
-    this.moveAxis("y", this.verticalVelocity * deltaSeconds);
-
-    if (this.camera.position.y < PLAYER_RESPAWN_Y) {
-      this.resetToStartPosition();
+  private applyFallDamage(distance: number): void {
+    const damage = Math.floor(distance - SAFE_FALL_DISTANCE);
+    if (damage > 0) {
+      this.takeDamage(damage, `Fell ${Math.floor(distance)} blocks`);
     }
   }
 
@@ -108,21 +216,9 @@ export class PlayerController {
     this.camera.rotation.x = this.pitch;
   }
 
-  intersectsBlock(x: number, y: number, z: number): boolean {
-    const body = getBodyBounds(this.camera.position);
-    return (
-      x < body.maxX &&
-      x + 1 > body.minX &&
-      y < body.maxY &&
-      y + 1 > body.minY &&
-      z < body.maxZ &&
-      z + 1 > body.minZ
-    );
-  }
-
-  private moveAxis(axis: "x" | "y" | "z", delta: number): void {
+  private moveAxis(axis: "x" | "y" | "z", delta: number): boolean {
     if (delta === 0) {
-      return;
+      return false;
     }
 
     const steps = Math.max(1, Math.ceil(Math.abs(delta) / COLLISION_STEP));
@@ -147,8 +243,10 @@ export class PlayerController {
         this.verticalVelocity = 0;
       }
 
-      return;
+      return true;
     }
+
+    return false;
   }
 
   private collidesAt(position: THREE.Vector3): boolean {
@@ -180,8 +278,10 @@ export class PlayerController {
       START_Z,
     );
     this.verticalVelocity = 0;
+    this.fallDistance = 0;
     this.grounded = false;
     this.wasJumpPressed = false;
+    this.onStateChanged();
   }
 }
 

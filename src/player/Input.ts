@@ -10,6 +10,7 @@ export class Input {
     document.addEventListener("keyup", this.handleKeyUp);
     document.addEventListener("mousemove", this.handleMouseMove);
     document.addEventListener("pointerlockchange", this.handlePointerLockChange);
+    window.addEventListener("blur", this.clearKeys);
   }
 
   consumeMouseDelta(): { x: number; y: number } {
@@ -31,7 +32,11 @@ export class Input {
   }
 
   private readonly requestPointerLock = (): void => {
-    this.targetElement.requestPointerLock();
+    try {
+      void this.targetElement.requestPointerLock().catch(() => undefined);
+    } catch {
+      this.pointerLocked = false;
+    }
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -53,6 +58,13 @@ export class Input {
 
   private readonly handlePointerLockChange = (): void => {
     this.pointerLocked = document.pointerLockElement === this.targetElement;
+
+    if (!this.pointerLocked) {
+      this.clearKeys();
+    }
+  };
+
+  private readonly clearKeys = (): void => {
+    this.keys.clear();
   };
 }
-

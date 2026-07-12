@@ -33,6 +33,15 @@ export class Chunk {
     this.blocks[this.getIndex(x, y, z)] = blockId;
   }
 
+  replaceBlocks(blocks: Uint8Array): boolean {
+    if (blocks.length !== this.blocks.length) {
+      return false;
+    }
+
+    this.blocks.set(blocks);
+    return true;
+  }
+
   contains(x: number, y: number, z: number): boolean {
     return (
       x >= 0 &&
@@ -48,4 +57,3 @@ export class Chunk {
     return x + z * CHUNK_SIZE + y * CHUNK_SIZE * CHUNK_SIZE;
   }
 }
-
