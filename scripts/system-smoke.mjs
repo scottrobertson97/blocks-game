@@ -9,12 +9,22 @@ const server = await createServer({
 });
 
 try {
-  const [{ World }, blockModule, terrainModule, inventoryModule, craftingModule] = await Promise.all([
+  const [
+    { World },
+    blockModule,
+    terrainModule,
+    inventoryModule,
+    craftingModule,
+    { Chunk },
+    { buildChunkGeometry },
+  ] = await Promise.all([
     server.ssrLoadModule("/src/world/World.ts"),
     server.ssrLoadModule("/src/world/Block.ts"),
     server.ssrLoadModule("/src/world/TerrainGenerator.ts"),
     server.ssrLoadModule("/src/inventory/Inventory.ts"),
     server.ssrLoadModule("/src/crafting/Crafting.ts"),
+    server.ssrLoadModule("/src/world/Chunk.ts"),
+    server.ssrLoadModule("/src/world/ChunkMesher.ts"),
   ]);
   const { BlockId } = blockModule;
   const { getTerrainHeight } = terrainModule;
@@ -52,6 +62,35 @@ try {
     }
   }
   assert.ok(undergroundAir > 100, "Expected carved cave air below the terrain surface");
+
+  const mesherWorld = new World();
+  const mesherChunk = new Chunk(0, 0);
+  mesherChunk.setBlock(1, 1, 1, BlockId.Grass);
+  mesherWorld.addChunk(mesherChunk);
+  const mesherGeometry = buildChunkGeometry(mesherWorld, mesherChunk);
+  const mesherNormals = mesherGeometry.getAttribute("normal");
+  const mesherUvs = mesherGeometry.getAttribute("uv");
+
+  for (const zNormal of [-1, 1]) {
+    const zFaceVertices = [];
+    for (let index = 0; index < mesherNormals.count; index += 1) {
+      if (
+        mesherNormals.getX(index) === 0 &&
+        mesherNormals.getY(index) === 0 &&
+        mesherNormals.getZ(index) === zNormal
+      ) {
+        zFaceVertices.push(index);
+      }
+    }
+
+    assert.equal(zFaceVertices.length, 4);
+    const [lowerLeft, lowerRight, upperRight] = zFaceVertices;
+    assert.notEqual(mesherUvs.getX(lowerLeft), mesherUvs.getX(lowerRight));
+    assert.equal(mesherUvs.getY(lowerLeft), mesherUvs.getY(lowerRight));
+    assert.equal(mesherUvs.getX(lowerRight), mesherUvs.getX(upperRight));
+    assert.notEqual(mesherUvs.getY(lowerRight), mesherUvs.getY(upperRight));
+  }
+  mesherGeometry.dispose();
 
   const inventory = new Inventory();
   const planksRecipe = CRAFTING_RECIPES.find((recipe) => recipe.id === "planks");
@@ -128,7 +167,7 @@ try {
   assert.notEqual(cycle.getLabel(), initialTime);
 
   process.stdout.write(
-    `System smoke passed: ${undergroundAir} cave cells, crafting, fall damage, water flow, TNT, and day/night.\n`,
+    `System smoke passed: ${undergroundAir} cave cells, upright side UVs, crafting, fall damage, water flow, TNT, and day/night.\n`,
   );
 } finally {
   await server.close();

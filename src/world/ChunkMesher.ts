@@ -59,6 +59,7 @@ const faces: Face[] = [
 ];
 
 const faceUvs: [number, number][] = [[0, 1], [0, 0], [1, 0], [1, 1]];
+const zSideFaceUvs: [number, number][] = [[0, 1], [1, 1], [1, 0], [0, 0]];
 
 export function buildChunkGeometry(world: World, chunk: Chunk): THREE.BufferGeometry {
   const solid = createBucket();
@@ -115,13 +116,14 @@ function emitVisibleFaces(options: {
 
     const vertexOffset = bucket.positions.length / 3;
     const tile = getBlockTextureTile(blockId, face.normal[1]);
+    const uvs = face.normal[2] === 0 ? faceUvs : zSideFaceUvs;
 
     face.corners.forEach((corner, cornerIndex) => {
       const cornerY = isLiquidBlock(blockId) && corner[1] === 1 ? 0.86 : corner[1];
       bucket.positions.push(x + corner[0], y + cornerY, z + corner[2]);
       bucket.normals.push(...face.normal);
       bucket.colors.push(face.shade, face.shade, face.shade);
-      bucket.uvs.push(...getAtlasUv(tile, faceUvs[cornerIndex][0], faceUvs[cornerIndex][1]));
+      bucket.uvs.push(...getAtlasUv(tile, uvs[cornerIndex][0], uvs[cornerIndex][1]));
     });
 
     bucket.indices.push(
